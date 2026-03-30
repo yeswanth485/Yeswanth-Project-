@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  aegiscore_engine:
+    build: .
+    container_name: aegiscore_engine
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      - PORT=8000
+    restart: unless-stopped
