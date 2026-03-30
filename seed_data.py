@@ -18,7 +18,7 @@ from scan_engine.intel.models import (
 from scan_engine.intel.enrichment import EnrichmentService
 
 def seed_enterprise_data():
-    print("🚀 Initializing AegisCore Enterprise Data Seeding...")
+    print("ðŸš€ Initializing AegisCore Enterprise Data Seeding...")
     create_db_and_tables()
     enricher = EnrichmentService()
     
@@ -29,7 +29,7 @@ def seed_enterprise_data():
         session.query(ScanRecord).delete()
         session.query(AssetRecord).delete()
         session.commit()
-        print("✅ Previous telemetry purged.")
+        print("âœ… Previous telemetry purged.")
 
         # 2. Seed Infrastructure Assets
         assets = [
@@ -40,7 +40,7 @@ def seed_enterprise_data():
             AssetRecord(name="Experimental-LLM-Integ", type=AssetType.REPOSITORY, environment="Development", coverage=45.0, posture_score=42.0, vulnerabilities_count=12, critical_vulnerabilities=4, description="R&D branch for machine learning components."),
         ]
         for a in assets: session.add(a)
-        print(f"✅ {len(assets)} Infrastructure assets deployed.")
+        print(f"âœ… {len(assets)} Infrastructure assets deployed.")
 
         # 3. Define High-Fidelity Vulnerabilities
         vuln_templates = [
@@ -101,7 +101,7 @@ def seed_enterprise_data():
         session.add(scan)
         session.commit()
         session.refresh(scan)
-        print(f"✅ Master Scan Record ([{scan.id[:8]}]) generated.")
+        print(f"âœ… Master Scan Record ([{scan.id[:8]}]) generated.")
 
         # 5. Seed Vulnerabilities & History
         for i, t in enumerate(vuln_templates):
@@ -140,8 +140,8 @@ def seed_enterprise_data():
             session.add(h)
         
         session.commit()
-        print(f"✅ {len(vuln_templates)} High-fidelity vulnerabilities synchronized.")
-        print("\n🏆 DATABASE POPULATED: AegisCore Enterprise HUB is now in a 'Neat and Clean' state.")
+        print(f"âœ… {len(vuln_templates)} High-fidelity vulnerabilities synchronized.")
+        print("\nðŸ† DATABASE POPULATED: AegisCore Enterprise HUB is now in a 'Neat and Clean' state.")
 
 if __name__ == "__main__":
     seed_enterprise_data()

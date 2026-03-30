@@ -598,7 +598,7 @@ PREDEFINED_WEBSITES = [
     },
     {
         "id": "pokeapi_co",
-        "name": "PokéAPI (RESTful Demo)",
+        "name": "PokÃ©API (RESTful Demo)",
         "url": "https://pokeapi.co/"
     },
     {
@@ -964,7 +964,7 @@ def run_queuing_task():
             
             # Detailed sequential feedback
             append_log("pipeline", f"[INGEST] ({i+1}/{found_count}) Discovered: {vuln.vulnerability_type} in {vuln.file_name}")
-            append_log("pipeline", f"[INGEST]   ↳ Mapping to Neural Core...")
+            append_log("pipeline", f"[INGEST]   â†³ Mapping to Neural Core...")
             db.commit() # Commit each one so frontend sees status change
             # time.sleep(1.8) removed
             
@@ -983,7 +983,7 @@ def get_queue_status():
 
 def run_executive_scan_task(session_id: str):
     """Step 1: Scans all endpoints and prepares the session for queue confirmation."""
-    append_log(session_id, "━━━ EXECUTIVE SECURITY AUDIT INITIATED ━━━", level="INFO")
+    append_log(session_id, "â”â”â” EXECUTIVE SECURITY AUDIT INITIATED â”â”â”", level="INFO")
     append_log(session_id, f"Scanning {len(PREDEFINED_WEBSITES)} target endpoints...")
     
     db = SessionLocal()
@@ -1000,7 +1000,7 @@ def run_executive_scan_task(session_id: str):
     vuln_ids = []
     
     for site in PREDEFINED_WEBSITES:
-        append_log(session_id, f"[SCAN] ► Auditing: {site['name']}", level="INFO")
+        append_log(session_id, f"[SCAN] â–º Auditing: {site['name']}", level="INFO")
         try:
             # We use scan_website_core_scan_only which returns count and stores as DETECTED
             found = scan_website_core_scan_only(site["url"], session_id, site["name"], scan_session.id)
@@ -1015,10 +1015,10 @@ def run_executive_scan_task(session_id: str):
             vuln_ids.extend([v.id for v in site_vulns])
             
         except Exception as e:
-            append_log(session_id, f"[SCAN]   ✗ Error: {site['name']} | {str(e)}", level="WARNING")
+            append_log(session_id, f"[SCAN]   âœ— Error: {site['name']} | {str(e)}", level="WARNING")
     
     append_log(session_id, f"")
-    append_log(session_id, f"━━━ SCAN COMPLETE ━━━", level="SUCCESS")
+    append_log(session_id, f"â”â”â” SCAN COMPLETE â”â”â”", level="SUCCESS")
     append_log(session_id, f"[INFO] Scan completed. {total_found} vulnerabilities detected.", level="SUCCESS")
     append_log(session_id, "[INFO] Ready to queue vulnerabilities for automated patching.")
     
@@ -1485,6 +1485,7 @@ def get_system_core():
 
 @app.get("/compliance")
 def get_compliance():
+    db = SessionLocal()
     
     # Get fix history (last 10 validated/fixed vulnerabilities)
     validated_vulns = db.query(Vulnerability).filter(
@@ -1498,6 +1499,15 @@ def get_compliance():
             "vulnerability_type": v.vulnerability_type,
             "file_name": v.file_name
         })
+        
+    all_vulns = db.query(Vulnerability).all()
+    closed_count = sum(1 for v in all_vulns if v.status in ["VALIDATED", "FIXED"])
+    open_count = len(all_vulns) - closed_count
+    
+    fix_breakdown_by_type = {}
+    for v in all_vulns:
+        if v.status in ["VALIDATED", "FIXED"]:
+            fix_breakdown_by_type[v.vulnerability_type] = fix_breakdown_by_type.get(v.vulnerability_type, 0) + 1
     
     db.close()
     return {
@@ -1543,5 +1553,5 @@ def get_feedback():
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
-    print(f"🔥 AEGISCORE PIPELINE STARTING ON PORT: {port}")
+    print(f"ðŸ”¥ AEGISCORE PIPELINE STARTING ON PORT: {port}")
     uvicorn.run(app, host="0.0.0.0", port=port)

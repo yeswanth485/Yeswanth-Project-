@@ -283,10 +283,10 @@
                     this.scanStatus = scanData.status || 'COMPLETED';
                     const foundCount = scanData.found_count;
 
-                    // Detect when ANY scan just finished → show Queue popup
+                    // Detect when ANY scan just finished â†’ show Queue popup
                     if (oldStatus === 'RUNNING' && this.scanStatus === 'COMPLETED' && !this.scanFinishedFlag) {
                         this.scanFinishedFlag = true;
-                        app.showToast('✅ Security Scan Complete', 'emerald');
+                        app.showToast('âœ… Security Scan Complete', 'emerald');
                         if (foundCount !== undefined && foundCount > 0) {
                             // Deliberate 3s delay so user can read terminal findings before popup
                             setTimeout(() => app.showQueueConfirmPopup(foundCount), 3000);
@@ -987,7 +987,7 @@
                     const noPipeline = !pipelineState.activeJob && pipelineState.queue && pipelineState.queue.length === 0;
                     if (allDone && noPipeline) {
                         this._pipelineDoneToastShown = true;
-                        this.showToast('✅ All vulnerabilities processed. Pipeline complete!', 'emerald');
+                        this.showToast('âœ… All vulnerabilities processed. Pipeline complete!', 'emerald');
                     }
                 }
                 // Reset flag when new jobs come in
@@ -1266,10 +1266,10 @@
                             
                             <div class="mt-6 flex relative z-10">
                                 ${v.status === 'FIXED' ?
-                        '<div class="px-6 py-4 w-full text-center text-emerald-400 tracking-[0.2em] text-[10px] font-black border border-emerald-500/50 rounded-xl bg-emerald-900/30 shadow-[0_0_20px_rgba(16,185,129,0.2)]">✓ SECURE DEPLOYMENT VALIDATED</div>' :
+                        '<div class="px-6 py-4 w-full text-center text-emerald-400 tracking-[0.2em] text-[10px] font-black border border-emerald-500/50 rounded-xl bg-emerald-900/30 shadow-[0_0_20px_rgba(16,185,129,0.2)]">âœ“ SECURE DEPLOYMENT VALIDATED</div>' :
                         v.status === 'FAILED' ?
-                            '<div class="px-6 py-4 w-full text-center text-rose-500 tracking-[0.2em] text-[10px] font-black border border-rose-500/50 rounded-xl bg-rose-900/30 shadow-[0_0_20px_rgba(244,63,94,0.2)]">⚠ AUTOMATION KERNEL PANIC</div>' :
-                            `<div class="px-6 py-4 w-full text-center text-emerald-400 tracking-[0.2em] text-[10px] font-black border border-emerald-500/50 rounded-xl bg-emerald-900/30 animate-pulse shadow-[0_0_20px_rgba(16,185,129,0.2)]">⚙ GENERATING LOGIC PATCH...</div>`
+                            '<div class="px-6 py-4 w-full text-center text-rose-500 tracking-[0.2em] text-[10px] font-black border border-rose-500/50 rounded-xl bg-rose-900/30 shadow-[0_0_20px_rgba(244,63,94,0.2)]">âš  AUTOMATION KERNEL PANIC</div>' :
+                            `<div class="px-6 py-4 w-full text-center text-emerald-400 tracking-[0.2em] text-[10px] font-black border border-emerald-500/50 rounded-xl bg-emerald-900/30 animate-pulse shadow-[0_0_20px_rgba(16,185,129,0.2)]">âš™ GENERATING LOGIC PATCH...</div>`
                     }
                             </div>
                         </div>
@@ -1482,7 +1482,7 @@
                     <div class="flex justify-between items-center mb-2">
                         <span class="text-emerald-400 font-mono text-xs">${c.vulnerability_id}</span>
                         <div class="flex gap-1 text-amber-500">
-                            ${Array(c.rating).fill('★').join('')}
+                            ${Array(c.rating).fill('â˜…').join('')}
                         </div>
                     </div>
                     <p class="text-slate-300 text-sm italic">"${c.comment}"</p>
@@ -1496,7 +1496,7 @@
                         <div class="text-[11px] text-slate-400 font-black uppercase tracking-[0.2em] mb-4 relative z-10">Average Security Rating</div>
                         <div class="text-9xl font-black text-amber-500 mb-6 drop-shadow-[0_0_15px_rgba(245,158,11,0.5)] relative z-10">${f.average_rating || 0}</div>
                         <div class="flex gap-2 text-3xl text-amber-500 mb-8 relative z-10">
-                            ${Array(Math.round(f.average_rating || 0)).fill('★').join('')}
+                            ${Array(Math.round(f.average_rating || 0)).fill('â˜…').join('')}
                         </div>
                         <div class="px-4 py-1.5 rounded-full border border-amber-500/30 bg-amber-900/20 text-[10px] tracking-widest font-black text-amber-400 uppercase relative z-10">${f.total_feedback || 0} Submissions</div>
                     </div>
