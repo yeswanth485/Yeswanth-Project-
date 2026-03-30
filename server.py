@@ -878,10 +878,10 @@ def scan_website_manual(payload: dict, background_tasks: BackgroundTasks):
 def executive_scan(background_tasks: BackgroundTasks):
     """
     Phase 1: Scan all predefined websites and log errors to Scanner terminal.
-    Does NOT queue vulnerabilities for patching - user must confirm via /pipeline/queue-all.
+    FULL AUTOMATION: Automatically process queue without manual confirmation.
     """
     global pipeline_paused
-    pipeline_paused = True  # Ensure paused at start of new scan
+    pipeline_paused = False  # Changed to False for FULL automation
     
     session_id = "executive-" + str(uuid.uuid4())[:8]
     terminal_sessions[session_id] = {"logs": [], "status": "RUNNING"}
@@ -1115,6 +1115,7 @@ def scan_website_core_scan_only(url: str, session_id: str, app_name: str, scan_s
                         db.add(db_vuln)
                         db.commit()
                         found_count += 1
+                        add_to_patch_queue(db_vuln.id) # FULL AUTOMATION
                         # Log to scanner terminal
                         append_log(session_id, f"[ERROR] {v_type} @ Line {line_num+1} in {app_name}", level="ERROR")
                         append_log(session_id, f"[ERROR]   Pattern: {stripped[:80]}...", level="ERROR")
@@ -1150,6 +1151,7 @@ def scan_website_core_scan_only(url: str, session_id: str, app_name: str, scan_s
                         db.add(db_vuln)
                         db.commit()
                         found_count += 1
+                        add_to_patch_queue(db_vuln.id) # FULL AUTOMATION
                         append_log(session_id, f"[ERROR] SQL_INJECTION risk: Unsanitized form field '{inp.get('name', 'unnamed')}' in {app_name}", level="ERROR")
                         # time.sleep(0.5) removed
 
@@ -1245,6 +1247,7 @@ def scan_website_core(url: str, session_id: str, app_name: str, scan_session_id:
                         )
                         db.add(db_vuln)
                         db.commit() # Commit each to trigger queue
+                        add_to_patch_queue(db_vuln.id) # FULL AUTOMATION
                         
                         # Update scan session metrics
                         scan_session = db.query(ScanSession).filter(ScanSession.id == scan_session_id).first()
@@ -1291,6 +1294,7 @@ def scan_website_core(url: str, session_id: str, app_name: str, scan_session_id:
                         )
                         db.add(db_vuln)
                         db.commit()
+                        add_to_patch_queue(db_vuln.id) # FULL AUTOMATION
                         
                         # Update scan session metrics
                         scan_session = db.query(ScanSession).filter(ScanSession.id == scan_session_id).first()
