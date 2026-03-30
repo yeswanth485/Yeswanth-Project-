@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -211,8 +211,10 @@
     </main>
 
     <script>
-        // Dynamic API URL - works on both localhost and Render
-        const API_URL = window.location.origin;
+        // Dynamic API URL - supports split deployment (Render/Vercel)
+        // To override, set localStorage.setItem('BACKEND_URL', 'https://your-render-app.onrender.com')
+        const API_URL = localStorage.getItem('BACKEND_URL') || window.location.origin;
+        console.log(`[INIT] Using Backend API: ${API_URL}`);
 
         const pipelineState = {
             scanId: null,
