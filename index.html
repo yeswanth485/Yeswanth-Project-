@@ -1620,7 +1620,7 @@
                     <div class="flex justify-between items-center mb-2">
                         <span class="text-emerald-400 font-mono text-xs">${c.vulnerability_id}</span>
                         <div class="flex gap-1 text-amber-500">
-                            ${Array(c.rating).fill('â˜…').join('')}
+                            ${Array(c.rating).fill('<i data-lucide="star" class="w-3 h-3 fill-current shadow-[0_0_10px_rgba(245,158,11,0.3)]"></i>').join('')}
                         </div>
                     </div>
                     <p class="text-slate-300 text-sm italic">"${c.comment}"</p>
@@ -1634,7 +1634,7 @@
                         <div class="text-[11px] text-slate-400 font-black uppercase tracking-[0.2em] mb-4 relative z-10">Average Security Rating</div>
                         <div class="text-9xl font-black text-amber-500 mb-6 drop-shadow-[0_0_15px_rgba(245,158,11,0.5)] relative z-10">${f.average_rating || 0}</div>
                         <div class="flex gap-2 text-3xl text-amber-500 mb-8 relative z-10">
-                            ${Array(Math.round(f.average_rating || 0)).fill('â˜…').join('')}
+                            ${Array(Math.round(f.average_rating || 0)).fill('<i data-lucide="star" class="w-8 h-8 fill-current drop-shadow-[0_0_15px_rgba(245,158,11,0.5)]"></i>').join('')}
                         </div>
                         <div class="px-4 py-1.5 rounded-full border border-amber-500/30 bg-amber-900/20 text-[10px] tracking-widest font-black text-amber-400 uppercase relative z-10">${f.total_feedback || 0} Submissions</div>
                     </div>
@@ -1646,6 +1646,7 @@
                         </div>
                     </div>
                 </div>`;
+                lucide.createIcons();
             },
 
             // Called once when navigating to terminal - builds static shell
