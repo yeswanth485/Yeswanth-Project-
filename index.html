@@ -196,8 +196,8 @@
                 Dashboard
             </h2>
             <div class="flex items-center gap-6">
-                <div
-                    class="px-3 py-1.5 rounded-full bg-slate-800/50 border border-slate-700/50 flex items-center gap-2">
+                <div onclick="const k = prompt('Enter AegisCore Enterprise API Key (if REQUIRE_AUTH is active on your server):', localStorage.getItem('AEGIS_API_KEY')||''); if(k!==null) { localStorage.setItem('AEGIS_API_KEY', k); alert('Enterprise Key updated. Reloading secure stream.'); window.location.reload(); }"
+                    class="px-3 py-1.5 rounded-full bg-slate-800/50 border border-slate-700/50 flex items-center gap-2 cursor-pointer hover:bg-slate-700/80 transition-all hover:scale-105 shadow-inner" title="Click to Configure API Key">
                     <span
                         class="block w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)] animate-pulse"></span>
                     <span class="text-[10px] font-bold tracking-widest text-slate-300 uppercase">System Active</span>
@@ -211,10 +211,24 @@
     </main>
 
     <script>
-        // Dynamic API URL - supports split deployment (Render/Vercel)
-        // To override, set localStorage.setItem('BACKEND_URL', 'https://your-render-app.onrender.com')
+        // Dynamic API URL
         const API_URL = localStorage.getItem('BACKEND_URL') || window.location.origin;
         console.log(`[INIT] Using Backend API: ${API_URL}`);
+
+        // Phase 12: Enterprise Authentication Interceptor
+        const originalFetch = window.fetch;
+        window.fetch = async function() {
+            let [resource, config] = arguments;
+            if (typeof resource === 'string' && resource.startsWith(API_URL)) {
+                const token = localStorage.getItem('AEGIS_API_KEY');
+                if (token) {
+                    config = config || {};
+                    config.headers = config.headers || {};
+                    config.headers['Aegis-API-Key'] = token;
+                }
+            }
+            return originalFetch(resource, config);
+        };
 
         const pipelineState = {
             scanId: null,

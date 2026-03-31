@@ -1,6 +1,6 @@
 import os
 import sys
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Header, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -87,8 +87,15 @@ DB_PATH = os.path.join(PROJECT_ROOT, "vulnerabilities_enforced.db")
 TEST_DATA_DIR = os.path.join(PROJECT_ROOT, "test_data")
 
 # --- DATABASE SETUP ---
-DATABASE_URL = f"sqlite:///{DB_PATH}"
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+DB_URL_ENV = os.getenv("DATABASE_URL", "")
+if DB_URL_ENV:
+    if DB_URL_ENV.startswith("postgres://"):
+        DB_URL_ENV = DB_URL_ENV.replace("postgres://", "postgresql://", 1)
+    DATABASE_URL = DB_URL_ENV
+    engine = create_engine(DATABASE_URL)
+else:
+    DATABASE_URL = f"sqlite:///{DB_PATH}"
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -146,6 +153,19 @@ app.add_middleware(
 )
 
 @app.middleware("http")
+async def enterprise_security_middleware(request: Request, call_next):
+    # Phase 11: Enterprise API Authentication Framework
+    require_auth = os.getenv("REQUIRE_AUTH", "False").lower() in ("true", "1", "t")
+    if require_auth and request.url.path not in ["/", "/webhook/github"] and not request.url.path.startswith("/test_data/"):
+        api_key = request.headers.get("Aegis-API-Key")
+        valid_key = os.getenv("AEGIS_API_KEY", "enterprise-demo-key-2026")
+        if api_key != valid_key:
+            return JSONResponse(status_code=401, content={"detail": "Unauthorized: Invalid or missing Aegis-API-Key header"})
+    
+    response = await call_next(request)
+    return response
+
+@app.middleware("http")
 async def no_cache(request, call_next):
     response = await call_next(request)
     response.headers["Cache-Control"] = "no-store"
@@ -158,6 +178,25 @@ def read_root():
         return HTMLResponse(content="<h1>AegisCore: Frontend Index Not Found</h1>", status_code=404)
     with open(index_path, "r", encoding="utf-8") as f:
         return f.read()
+
+@app.post("/webhook/github")
+async def github_webhook(request: Request, background_tasks: BackgroundTasks):
+    """
+    Phase 11: CI/CD Pipeline Integration
+    Listens to GitHub push events and natively triggers the AegisCore security scanner.
+    """
+    payload = await request.json()
+    repo = payload.get("repository", {}).get("full_name", "unknown")
+    branch = payload.get("ref", "unknown")
+    
+    append_log("pipeline", f"[WEBHOOK] Push detected on {repo} ({branch}). Engaging autonomous verification.", level="WARNING")
+    
+    session_id = str(uuid.uuid4())[:8]
+    job = {"scan_id": session_id, "type": "executive"}
+    scan_queue.append(job)
+    process_queue()
+    
+    return {"status": "Webhook acknowledged, security scan initiated."}
 
 @app.get("/version")
 def get_version():
