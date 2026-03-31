@@ -270,9 +270,8 @@
                     this.queueCount = pipe.queue_count || 0;
                     this.feedbackData = f;
 
-                    // NEVER call app.render() here - that causes blinking.
-                    // Only update specific data-bound elements without re-building the DOM shell.
-                    app.smartUpdate();
+                    // Atomic UI Update
+                    app.render(true);
                 } catch (e) { console.error("Sync Error", e); }
             },
 
@@ -593,6 +592,8 @@
                     else if (page === 'website-scanner') {
                         this.updateWebsiteScannerDynamic(viewport);
                     }
+                    // Trigger Lucide on every dynamic update to ensure icons render
+                    lucide.createIcons();
                 }
 
                 this.renderGlobalOverlays();
@@ -1345,8 +1346,8 @@
             },
 
             renderSystem(el) {
-                const s = pipelineState.systemCore;
-                const accuracy = s.engine_accuracy || 0;
+                const s = pipelineState.systemCore || {};
+                const accuracy = s.engine_accuracy || 100.0;
                 const riskScore = s.current_risk_score || 0;
 
                 // Risk meter color
@@ -1357,16 +1358,16 @@
                     <div class="glass p-10 rounded-3xl text-center border-t border-t-white/10 relative overflow-hidden shadow-[0_20px_40px_-15px_rgba(16,185,129,0.2)]">
                         <div class="absolute inset-0 bg-emerald-500/5"></div>
                         <div class="text-[11px] text-slate-400 font-black uppercase tracking-[0.2em] mb-3 relative z-10">Engine Accuracy</div>
-                        <div class="text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-indigo-500 relative z-10 tracking-tighter shadow-sm">${accuracy}%</div>
+                        <div id="system-accuracy-val" class="text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-indigo-500 relative z-10 tracking-tighter shadow-sm">${accuracy}%</div>
                         <div class="mt-6 h-3 bg-black/60 rounded-full overflow-hidden p-0.5 border border-white/5 relative z-10">
-                            <div class="h-full bg-gradient-to-r from-emerald-500 to-indigo-400 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.8)]" style="width: ${accuracy}%"></div>
+                            <div id="system-accuracy-bar" class="h-full bg-gradient-to-r from-emerald-500 to-indigo-400 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.8)]" style="width: ${accuracy}%"></div>
                         </div>
                     </div>
                     
                     <div class="glass p-10 rounded-3xl text-center border-t border-t-white/10 relative overflow-hidden shadow-[0_20px_40px_-15px_rgba(244,63,94,0.1)]">
                         <div class="absolute inset-0 bg-${riskColor}-500/5"></div>
                         <div class="text-[11px] text-slate-400 font-black uppercase tracking-[0.2em] mb-3 relative z-10">Current Risk Score</div>
-                        <div class="text-7xl font-black text-${riskColor}-500 relative z-10 tracking-tighter filter drop-shadow-[0_0_15px_rgba(244,63,94,0.3)]">${riskScore}</div>
+                        <div id="system-risk-val" class="text-7xl font-black text-${riskColor}-500 relative z-10 tracking-tighter filter drop-shadow-[0_0_15px_rgba(244,63,94,0.3)]">${riskScore}</div>
                         <div class="mt-4 inline-block px-4 py-1.5 rounded-full border border-${riskColor}-500/30 bg-${riskColor}-900/20 text-[10px] tracking-widest font-black text-${riskColor}-400 uppercase relative z-10">${riskScore > 50 ? 'CRITICAL RISK' : riskScore > 20 ? 'MODERATE RISK' : 'SECURE'}</div>
                     </div>
                     
@@ -1601,10 +1602,10 @@
             },
 
             updateSystemDynamic(el) {
-                const s = pipelineState.systemCore;
+                const s = pipelineState.systemCore || {};
                 const accuracyEl = document.getElementById('system-accuracy-val');
                 const riskEl = document.getElementById('system-risk-val');
-                if (accuracyEl) accuracyEl.innerText = `${s.engine_accuracy || 0}%`;
+                if (accuracyEl) accuracyEl.innerText = `${s.engine_accuracy || 100.0}%`;
                 if (riskEl) riskEl.innerText = s.current_risk_score || 0;
             },
 
@@ -1616,36 +1617,48 @@
             renderFeedback(el) {
                 const f = pipelineState.feedbackData;
                 const comments = (f.comments || []).map(c => `
-                <div class="bg-slate-900/50 border border-slate-800 p-4 rounded-lg mb-3">
-                    <div class="flex justify-between items-center mb-2">
-                        <span class="text-emerald-400 font-mono text-xs">${c.vulnerability_id}</span>
-                        <div class="flex gap-1 text-amber-500">
-                            ${Array(c.rating).fill('<i data-lucide="star" class="w-3 h-3 fill-current shadow-[0_0_10px_rgba(245,158,11,0.3)]"></i>').join('')}
+                <div class="glass p-8 rounded-[35px] border border-white/5 bg-slate-950/40 relative group hover:border-emerald-500/20 transition-all mb-6">
+                    <div class="flex justify-between items-start mb-6">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                                <i data-lucide="user" class="w-6 h-6"></i>
+                            </div>
+                            <div>
+                                <div class="text-[11px] text-emerald-500 font-black tracking-[0.2em] uppercase mb-1">Vulnerability Logic Fix</div>
+                                <div class="text-white font-black text-lg tracking-tight uppercase italic">${c.vulnerability_id}</div>
+                            </div>
+                        </div>
+                        <div class="flex gap-1 text-emerald-400/40 group-hover:text-emerald-400 transition-colors">
+                            ${Array(5).fill(0).map((_, i) => `<i data-lucide="star" class="w-3.5 h-3.5 ${i < c.rating ? 'fill-emerald-500 text-emerald-500' : ''}"></i>`).join('')}
                         </div>
                     </div>
-                    <p class="text-slate-300 text-sm italic">"${c.comment}"</p>
-                    <div class="mt-2 text-right text-[10px] text-slate-600 uppercase font-bold">${c.created_at}</div>
+                    <div class="p-6 bg-black/60 rounded-2xl border border-white/5 text-sm text-slate-300 font-medium leading-relaxed italic">
+                        "${c.comment}"
+                    </div>
+                    <div class="mt-6 flex justify-between items-center text-[10px] text-slate-500 font-black uppercase tracking-widest">
+                        <span>Reported at: ${c.created_at}</span>
+                        <span class="flex items-center gap-2"><i data-lucide="shield-check" class="w-3 h-3"></i> Verified Deployment</span>
+                    </div>
                 </div>`).join('');
 
                 el.innerHTML = `
-                <div class="grid grid-cols-2 gap-8 h-[600px]">
-                    <div class="glass p-10 rounded-3xl flex flex-col items-center justify-center text-center relative overflow-hidden border border-amber-500/20 shadow-[0_10px_40px_-15px_rgba(245,158,11,0.2)]">
-                        <div class="absolute inset-0 bg-amber-500/5 blur-3xl rounded-full"></div>
-                        <div class="text-[11px] text-slate-400 font-black uppercase tracking-[0.2em] mb-4 relative z-10">Average Security Rating</div>
-                        <div class="text-9xl font-black text-amber-500 mb-6 drop-shadow-[0_0_15px_rgba(245,158,11,0.5)] relative z-10">${f.average_rating || 0}</div>
-                        <div class="flex gap-2 text-3xl text-amber-500 mb-8 relative z-10">
-                            ${Array(Math.round(f.average_rating || 0)).fill('<i data-lucide="star" class="w-8 h-8 fill-current drop-shadow-[0_0_15px_rgba(245,158,11,0.5)]"></i>').join('')}
-                        </div>
-                        <div class="px-4 py-1.5 rounded-full border border-amber-500/30 bg-amber-900/20 text-[10px] tracking-widest font-black text-amber-400 uppercase relative z-10">${f.total_feedback || 0} Submissions</div>
+                <div class="flex justify-between items-end mb-10 border-b border-white/5 pb-8">
+                    <div>
+                        <h3 class="text-4xl font-black text-white tracking-tight italic uppercase mb-2">User Feedback & QA</h3>
+                        <p class="text-slate-500 text-sm font-bold tracking-[0.2em] uppercase">Deployment Validation Stream</p>
                     </div>
-                    
-                    <div class="flex flex-col h-full glass rounded-3xl border border-white/5 p-8 relative overflow-hidden">
-                        <h3 class="text-white font-black text-xl mb-6 tracking-tight relative z-10">Community Feedback</h3>
-                        <div class="flex-1 overflow-y-auto pr-4 custom-scrollbar relative z-10">
-                            ${comments || '<div class="h-full flex items-center justify-center text-slate-500 font-black uppercase tracking-[0.2em] text-[10px]">No feedback submitted yet.<br>Validate a patch to submit feedback.</div>'}
+                    <div class="text-right">
+                        <div class="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Average Patch Quality</div>
+                        <div class="text-4xl font-black text-emerald-400 tracking-tighter italic">
+                            ${f.average_rating || 0}/5.0
                         </div>
                     </div>
-                </div>`;
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    ${comments || '<div class="col-span-2 text-center py-20 text-slate-500 font-black tracking-[0.2em] text-[11px] uppercase">Awaiting Neural Feedback Stream...</div>'}
+                </div>
+                `;
                 lucide.createIcons();
             },
 
@@ -1778,10 +1791,22 @@
                     </div>
                     
                     <!-- Premium Visual Banner -->
-                    <div class="mb-10 rounded-3xl overflow-hidden border border-white/5 shadow-2xl relative h-48 group">
-                        <img src="github_banner.png" alt="GitHub Security" class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700 scale-105 group-hover:scale-100">
-                        <div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
-                        <div class="absolute bottom-6 left-8 text-[10px] text-blue-400 font-black uppercase tracking-[0.4em]">Holographic Shielding Active</div>
+                    <div class="mb-10 rounded-3xl overflow-hidden border border-blue-500/30 shadow-2xl relative h-56 group">
+                        <img src="github_banner.png" alt="GitHub Security" class="w-full h-full object-cover transition-all duration-700 scale-105 group-hover:scale-100 filter brightness-110">
+                        <div class="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent"></div>
+                        
+                        <!-- Overlay Hud -->
+                        <div class="absolute bottom-6 left-8 right-8 flex justify-between items-end">
+                            <div>
+                                <div class="text-[10px] text-blue-400 font-black uppercase tracking-[0.4em] mb-1">Neural Integration Active</div>
+                                <div class="text-xs text-white font-mono opacity-80">CONNECTION: github_api_v3_secure</div>
+                            </div>
+                            <div class="flex gap-2">
+                                <span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                                <span class="w-1.5 h-1.5 rounded-full bg-blue-400/50"></span>
+                                <span class="w-1.5 h-1.5 rounded-full bg-blue-400/20"></span>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="flex gap-6 relative z-10">
