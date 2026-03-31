@@ -249,13 +249,14 @@
 
             async fetchAll() {
                 try {
-                    const [vulns, dash, comp, core, sites, pipe] = await Promise.all([
+                    const [vulns, dash, comp, core, sites, pipe, f] = await Promise.all([
                         fetch(`${API_URL}/vulnerabilities`).then(r => r.json()),
                         fetch(`${API_URL}/dashboard`).then(r => r.json()),
                         fetch(`${API_URL}/compliance`).then(r => r.json()),
                         fetch(`${API_URL}/system-core`).then(r => r.json()),
                         fetch(`${API_URL}/available-websites`).then(r => r.json()),
-                        fetch(`${API_URL}/pipeline/status`).then(r => r.json())
+                        fetch(`${API_URL}/pipeline/status`).then(r => r.json()),
+                        fetch(`${API_URL}/feedback`).then(r => r.json())
                     ]);
                     this.vulnerabilities = vulns;
                     this.metrics = dash;
@@ -267,6 +268,7 @@
                     this.queuingActive = pipe.queuing_active;
                     this.queue = Array.isArray(pipe.queue) ? pipe.queue : [];
                     this.queueCount = pipe.queue_count || 0;
+                    this.feedbackData = f;
 
                     // NEVER call app.render() here - that causes blinking.
                     // Only update specific data-bound elements without re-building the DOM shell.
@@ -578,6 +580,13 @@
                         const newHash = JSON.stringify(pipelineState.complianceData);
                         if(viewport.getAttribute('data-hash') !== newHash) {
                             this.renderCompliance(viewport);
+                            viewport.setAttribute('data-hash', newHash);
+                        }
+                    }
+                    else if (page === 'feedback') {
+                        const newHash = JSON.stringify(pipelineState.feedbackData);
+                        if(viewport.getAttribute('data-hash') !== newHash) {
+                            this.renderFeedback(viewport);
                             viewport.setAttribute('data-hash', newHash);
                         }
                     }
