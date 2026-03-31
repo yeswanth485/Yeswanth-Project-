@@ -106,6 +106,7 @@ class ScanSession(Base):
     total_files_scanned = Column(Integer, default=0)
     total_vulnerabilities = Column(Integer, default=0)
     overall_risk_score = Column(Float, default=100.0)
+    trigger_source = Column(String, default="Manual Dashboard") # Enterprise Scope Mapping
 
 class Vulnerability(Base):
     __tablename__ = "vulnerabilities"
@@ -192,7 +193,7 @@ async def github_webhook(request: Request, background_tasks: BackgroundTasks):
     append_log("pipeline", f"[WEBHOOK] Push detected on {repo} ({branch}). Engaging autonomous verification.", level="WARNING")
     
     session_id = str(uuid.uuid4())[:8]
-    job = {"scan_id": session_id, "type": "executive"}
+    job = {"scan_id": session_id, "type": "executive", "trigger_source": f"GitHub Webhook: {repo}"}
     scan_queue.append(job)
     process_queue()
     
@@ -795,7 +796,11 @@ def run_website_audit(scan_id: str, website_id: str):
     
     db = SessionLocal()
     # Create ScanSession for website audit
-    scan_session = ScanSession(total_files_scanned=1, total_vulnerabilities=0, overall_risk_score=0)
+    trigger = "Manual Dashboard"
+    if hasattr(active_scan, 'get') and active_scan:
+        trigger = active_scan.get("trigger_source", "Manual Dashboard")
+        
+    scan_session = ScanSession(total_files_scanned=1, total_vulnerabilities=0, overall_risk_score=0, trigger_source=trigger)
     db.add(scan_session)
     db.commit()
     db.refresh(scan_session)
@@ -1025,11 +1030,16 @@ def run_executive_scan_task(session_id: str):
     append_log(session_id, "â”â”â” EXECUTIVE SECURITY AUDIT INITIATED â”â”â”", level="INFO")
     append_log(session_id, f"Scanning {len(PREDEFINED_WEBSITES)} target endpoints...")
     
+    trigger = "Manual Dashboard"
+    if hasattr(active_scan, 'get') and active_scan:
+        trigger = active_scan.get("trigger_source", "Manual Dashboard")
+        
     db = SessionLocal()
     scan_session = ScanSession(
         total_files_scanned=len(PREDEFINED_WEBSITES),
         total_vulnerabilities=0,
-        overall_risk_score=0
+        overall_risk_score=0,
+        trigger_source=trigger
     )
     db.add(scan_session)
     db.commit()
@@ -1075,7 +1085,7 @@ def run_executive_scan_task(session_id: str):
 
 def scan_website_task(url: str, session_id: str, app_name: str):
     db = SessionLocal()
-    scan_session = ScanSession(total_files_scanned=1, total_vulnerabilities=0, overall_risk_score=0)
+    scan_session = ScanSession(total_files_scanned=1, total_vulnerabilities=0, overall_risk_score=0, trigger_source=f"Custom URL Payload")
     db.add(scan_session)
     db.commit()
     db.refresh(scan_session)
@@ -1439,7 +1449,7 @@ def get_dashboard_metrics():
     
     if not session:
         db.close()
-        return {"total": 0, "patched": 0, "validated": 0, "risk_score": 0}
+        return {"total": 0, "patched": 0, "validated": 0, "risk_score": 0, "trigger_source": "Offline"}
         
     vulns = db.query(Vulnerability).filter(Vulnerability.scan_session_id == session.id).all()
     total = len(vulns)
@@ -1457,7 +1467,8 @@ def get_dashboard_metrics():
         "validated": validated,
         "risk_score": round(current_risk, 1),
         "initial_risk": round(initial_risk, 1),
-        "scan_time": session.created_at
+        "scan_time": session.created_at,
+        "trigger_source": getattr(session, "trigger_source", "Manual Dashboard")
     }
 
 @app.post("/github-pr/{id}")

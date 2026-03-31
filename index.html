@@ -684,7 +684,13 @@
                             <h3 class="text-3xl font-black text-white flex items-center gap-4 tracking-tight uppercase italic underline decoration-emerald-500 decoration-4 underline-offset-8">
                                 Cyber Defense Pipeline
                             </h3>
-                            <p class="text-slate-500 text-xs mt-4 font-black tracking-[0.2em] uppercase">Autonomous Remediation Core v4.0.2</p>
+                            <div class="flex items-center gap-4 mt-4">
+                                <p class="text-slate-500 text-xs font-black tracking-[0.2em] uppercase">Autonomous Remediation Core v4.0.2</p>
+                                <span class="bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-2">
+                                    <i data-lucide="radio-receiver" class="w-3 h-3"></i> 
+                                    Connection: ${s.trigger_source || 'Manual Dashboard'}
+                                </span>
+                            </div>
                         </div>
                         <div id="pipeline-mini-status" class="text-[11px] font-black px-6 py-2 rounded-full border border-emerald-500 text-emerald-400 bg-emerald-900/30 shadow-[0_0_30px_rgba(16,185,129,0.4)] uppercase tracking-[0.3em] transition-all duration-500 animate-pulse">
                             SCANNING ACTIVE
@@ -1266,7 +1272,7 @@
                     </div>
                 </div>
                 
-                <div class="glass p-10 rounded-3xl bg-black/40 border border-white/5">
+                <div class="glass p-10 rounded-3xl bg-black/40 border border-white/5 mb-10">
                     <h3 class="text-2xl font-black text-white mb-8 tracking-tight">Deep Diagnostics</h3>
                     <div class="grid grid-cols-3 gap-8 text-center divide-x divide-white/5">
                         <div class="px-4">
@@ -1281,6 +1287,25 @@
                             <div class="text-5xl font-black text-emerald-400 tracking-tighter">${s.validated_count || 0}</div>
                             <div class="text-[10px] text-slate-500 font-black tracking-[0.2em] uppercase mt-3">Threats Eliminated</div>
                         </div>
+                    </div>
+                </div>
+
+                <div class="glass p-10 rounded-3xl bg-gradient-to-br from-indigo-900/20 to-black border border-indigo-500/20 shadow-inner">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-xl font-black text-white tracking-tight flex items-center gap-3">
+                            <i data-lucide="webhook" class="w-6 h-6 text-indigo-400"></i>
+                            Enterprise CI/CD Integration
+                        </h3>
+                        <span class="px-3 py-1 bg-indigo-500/10 border border-indigo-500/30 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400 rounded-lg">Webhook Active</span>
+                    </div>
+                    <p class="text-slate-400 text-sm mb-6 leading-relaxed">Configure your external repositories to trigger autonomous DevSecOps sweeps instantly upon every code push.</p>
+                    
+                    <div class="bg-black/80 p-4 rounded-2xl border border-white/5 flex items-center gap-4">
+                        <div class="text-[10px] text-slate-500 font-black uppercase tracking-widest pl-2">Payload URL</div>
+                        <input type="text" readonly value="${API_URL}/webhook/github" class="flex-1 bg-transparent text-indigo-400 font-mono text-xs outline-none select-all">
+                        <button onclick="navigator.clipboard.writeText('${API_URL}/webhook/github'); this.innerHTML='<i data-lucide=\'check\'></i> COPIED'; lucide.createIcons(); setTimeout(() => {this.innerHTML='<i data-lucide=\'copy\'></i> COPY'; lucide.createIcons();}, 2000)" class="px-4 py-2 bg-white/5 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-400 rounded-xl text-[10px] font-black tracking-[0.2em] uppercase transition-all flex items-center gap-2">
+                            <i data-lucide="copy" class="w-3 h-3"></i> COPY
+                        </button>
                     </div>
                 </div>
             `;
