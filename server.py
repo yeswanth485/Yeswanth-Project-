@@ -800,12 +800,16 @@ def run_github_repo_scan(job):
             db.query(Vulnerability).filter(Vulnerability.id == vuln.id).update({"status": "QUEUED_FOR_PATCH"})
             db.commit()
             patch_queue.append({"vuln_id": str(vuln.id), "status": "QUEUED"})
-        process_patch_queue()
+        # process_patch_queue() removed, handled by trigger_autonomous_remediation
         append_log(session_id, "=== SCAN COMPLETE ===", level="SUCCESS")
     db.close()
     
-    terminal_sessions[session_id]["found_count"] = len(detected_vulns)
+    total_found = len(detected_vulns)
+    terminal_sessions[session_id]["found_count"] = total_found
     terminal_sessions[session_id]["status"] = "COMPLETED"
+    
+    # Trigger Bridge
+    trigger_autonomous_remediation(total_found, session_id)
 
 @app.post("/scan")
 def execute_scan(background_tasks: BackgroundTasks):
@@ -888,7 +892,13 @@ def run_filesystem_scan(session_id: str):
     db.commit()
     append_log(session_id, f"Scan session {scan_session.id} finished.", level="SUCCESS")
     db.close()
+    
+    total_found = len(detected_vulns)
+    terminal_sessions[session_id]["found_count"] = total_found
     terminal_sessions[session_id]["status"] = "COMPLETED"
+    
+    # Trigger Bridge
+    trigger_autonomous_remediation(total_found, session_id)
 
 @app.post("/initialize-audit/{website_id}")
 def initialize_audit(website_id: str):
@@ -1021,6 +1031,8 @@ def run_website_audit(scan_id: str, website_id: str):
         
         append_log(scan_id, "Audit Completed Successfully.", level="SUCCESS")
         db.commit()
+        # Trigger Bridge
+        trigger_autonomous_remediation(detected_count, scan_id)
     except Exception as e:
         append_log(scan_id, f"Connection failed or error occurred: {str(e)}", level="WARNING")
     finally:
@@ -1188,6 +1200,33 @@ def get_queue_status():
         "pending_jobs": scan_queue
     }
 
+def trigger_autonomous_remediation(total_found, session_id):
+    if total_found > 0:
+        global pipeline_paused, queuing_active
+        pipeline_paused = False  # Automatically unpause
+        queuing_active = True
+        
+        def autonomous_bridge():
+            time.sleep(1.5) # Small delay for UI sync
+            
+            if len(patch_queue) > 0:
+                # Scanner already populated the queue - skip ingestion, start patching NOW
+                append_log("pipeline", f"[SYSTEM] HANDOVER SUCCESS: {len(patch_queue)} findings already queued by live scanner.", level="SUCCESS")
+                append_log("pipeline", "[SYSTEM] BYPASSING REGISTRY INGESTION - IMMEDIATE REMEDIATION START.", level="SUCCESS")
+                append_log("pipeline", "[SUCCESS] AUTOMATION PATH FINDING INITIATED. COMMENCING REMEDIATION PROTOCOL...", level="SUCCESS")
+            else:
+                # Fallback: queue from database
+                append_log("pipeline", "[SYSTEM] No live queue found. Fetching from registry...", level="INFO")
+                # Import here to avoid circular dependencies if needed
+                run_queuing_task()
+            
+            # Start the patch worker immediately
+            process_patch_queue()
+        
+        bridge_thread = threading.Thread(target=autonomous_bridge)
+        bridge_thread.start()
+        append_log("pipeline", "[SYSTEM] AUTONOMOUS KERNEL: INGESTING SCAN FINDINGS...", level="INFO")
+
 def run_executive_scan_task(session_id: str):
     append_log(session_id, "=== EXECUTIVE SECURITY AUDIT INITIATED ===", level="INFO")
     append_log(session_id, f"Scanning {len(PREDEFINED_WEBSITES)} target endpoints...")
@@ -1238,33 +1277,7 @@ def run_executive_scan_task(session_id: str):
     db.close()
     
     # Fully Autonomous Handover:
-    if total_found > 0:
-        global pipeline_paused, queuing_active
-        pipeline_paused = False  # Automatically unpause
-        queuing_active = True
-        
-        def autonomous_bridge():
-            time.sleep(1.5) # Small delay for UI sync
-            
-            if len(patch_queue) > 0:
-                # Scanner already populated the queue - skip ingestion, start patching NOW
-                append_log("pipeline", f"[SYSTEM] HANDOVER SUCCESS: {len(patch_queue)} findings already queued by live scanner.", level="SUCCESS")
-                append_log("pipeline", "[SYSTEM] BYPASSING REGISTRY INGESTION - IMMEDIATE REMEDIATION START.", level="SUCCESS")
-                append_log("pipeline", "[SUCCESS] AUTOMATION PATH FINDING INITIATED. COMMENCING REMEDIATION PROTOCOL...", level="SUCCESS")
-            else:
-                # Fallback: queue from database
-                append_log("pipeline", "[SYSTEM] No live queue found. Fetching from registry...", level="INFO")
-                run_queuing_task()
-            
-            # Start the patch worker immediately
-            process_patch_queue()
-        
-        bridge_thread = threading.Thread(target=autonomous_bridge)
-        bridge_thread.start()
-        
-        append_log("pipeline", "[SYSTEM] AUTONOMOUS KERNEL: INGESTING EXECUTIVE SCAN FINDINGS...", level="INFO")
-    else:
-        append_log(session_id, "[INFO] Scan clean. No vulnerabilities identified for remediation.")
+    trigger_autonomous_remediation(total_found, session_id)
 
 
 def scan_website_task(url: str, session_id: str, app_name: str):
@@ -1281,6 +1294,9 @@ def scan_website_task(url: str, session_id: str, app_name: str):
         # CRITICAL: Set found_count BEFORE status="COMPLETED"
         terminal_sessions[session_id]["found_count"] = found_count
         terminal_sessions[session_id]["status"] = "COMPLETED"
+        
+        # Trigger Bridge
+        trigger_autonomous_remediation(found_count, session_id)
     except Exception as e:
         append_log(session_id, f"Scan failed: {str(e)}", level="ERROR")
         terminal_sessions[session_id]["found_count"] = 0
