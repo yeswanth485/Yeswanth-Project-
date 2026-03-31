@@ -1,6 +1,8 @@
+import traceback, sys
 try:
-    import server
-    print("SUCCESS: server.py imported correctly.")
+    with open('server.py', 'r', encoding='utf-8') as f:
+        code = f.read()
+    compile(code, 'server.py', 'exec')
 except Exception as e:
-    import traceback
-    traceback.print_exc()
+    with open('error_py.txt', 'w', encoding='utf-8') as f:
+        traceback.print_exc(file=f)

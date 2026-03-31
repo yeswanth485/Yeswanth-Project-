@@ -58,6 +58,8 @@ def run_scan_job(job):
             run_website_audit(scan_id, job["website_id"])
         elif job["type"] == "executive":
             run_executive_scan_task(scan_id)
+        elif job["type"] == "github_repo":
+            run_github_repo_scan(job)
     except Exception as e:
         append_log(scan_id, f"Job failed: {str(e)}", level="ERROR")
     finally:
@@ -193,7 +195,7 @@ async def github_webhook(request: Request, background_tasks: BackgroundTasks):
     append_log("pipeline", f"[WEBHOOK] Push detected on {repo} ({branch}). Engaging autonomous verification.", level="WARNING")
     
     session_id = str(uuid.uuid4())[:8]
-    job = {"scan_id": session_id, "type": "executive", "trigger_source": f"GitHub Webhook: {repo}"}
+    job = {"scan_id": session_id, "type": "github_repo", "repo": repo, "branch": branch, "trigger_source": f"GitHub Webhook: {repo}"}
     scan_queue.append(job)
     process_queue()
     
@@ -676,6 +678,103 @@ def terminal_stream(scan_id: str = None, session_id: str = "default"):
     session = terminal_sessions.get(sid, {"logs": [], "status": "COMPLETED"})
     return session
 
+def fetch_github_repo_files(repo_full_name, branch, session_id):
+    append_log(session_id, f"[GITHUB] Fetching file tree for {repo_full_name} via GitHub API...")
+    if branch.startswith('refs/heads/'):
+        branch = branch.replace('refs/heads/', '')
+    tree_url = f"https://api.github.com/repos/{repo_full_name}/git/trees/{branch}?recursive=1"
+    headers = {}
+    token = os.getenv("GITHUB_TOKEN")
+    if token:
+        headers["Authorization"] = f"token {token}"
+    try:
+        resp = requests.get(tree_url, headers=headers)
+        if resp.status_code != 200:
+            append_log(session_id, f"[ERROR] Failed to fetch repo tree: {resp.status_code}", level="ERROR")
+            return []
+        tree_data = resp.json().get("tree", [])
+        files_to_scan = []
+        for item in tree_data:
+            if item.get("type") == "blob":
+                path = item.get("path", "")
+                if path.endswith((".py", ".js")):
+                    files_to_scan.append(item)
+        append_log(session_id, f"[GITHUB] Discovered {len(files_to_scan)} scannable code files.")
+        fetched_contents = []
+        for f in files_to_scan:
+            path = f["path"]
+            raw_url = f"https://raw.githubusercontent.com/{repo_full_name}/{branch}/{path}"
+            blob_url = f["url"]
+            blob_headers = headers.copy()
+            blob_headers["Accept"] = "application/vnd.github.v3.raw"
+            content_resp = requests.get(blob_url, headers=blob_headers)
+            if content_resp.status_code == 200:
+                fetched_contents.append({"filename": path, "content": content_resp.text})
+            else:
+                append_log(session_id, f"[WARNING] Failed to fetch raw file: {path}", level="WARNING")
+        return fetched_contents
+    except Exception as e:
+        append_log(session_id, f"[ERROR] Exception during GitHub fetch: {str(e)}", level="ERROR")
+        return []
+
+def run_github_repo_scan(job):
+    session_id = job["scan_id"]
+    repo = job.get("repo")
+    branch = job.get("branch", "main")
+    append_log(session_id, f"=== GITHUB REPOSITORY AUDIT INITIATED ===", level="INFO")
+    append_log(session_id, f"Target: {repo} (branch: {branch})")
+    
+    db = SessionLocal()
+    scan_session = ScanSession(
+        total_files_scanned=0,
+        total_vulnerabilities=0,
+        overall_risk_score=0,
+        trigger_source=job.get("trigger_source", "GitHub Integration")
+    )
+    db.add(scan_session)
+    db.commit()
+    db.refresh(scan_session)
+    
+    fetched_files = fetch_github_repo_files(repo, branch, session_id)
+    scan_session.total_files_scanned = len(fetched_files)
+    
+    detected_vulns = []
+    
+    for f in fetched_files:
+        filename = f["filename"]
+        content = f["content"]
+        append_log(session_id, f"[DEBUG] Scanning memory-mapped file: {filename}")
+        
+        found = scan_file_content(content, filename, target_url=f"github://{repo}/{filename}")
+        for v in found:
+            append_log(session_id, f"[ERROR] {filename} | Line {v['line_number']} | {v['vulnerability_type']}", level="ERROR")
+            v["patch_explanation"] = get_remediation_info(v["vulnerability_type"], v["code_snippet"]).get("explanation")
+            
+            db_vuln = Vulnerability(**v, scan_session_id=scan_session.id)
+            db.add(db_vuln)
+            db.commit()
+            detected_vulns.append(db_vuln)
+            
+    total_risk = sum(v.risk_score for v in detected_vulns)
+    scan_session.total_vulnerabilities = len(detected_vulns)
+    scan_session.overall_risk_score = total_risk
+    db.commit()
+    
+    if not detected_vulns:
+        append_log(session_id, "[SUCCESS] No vulnerabilities detected in remote repository.", level="SUCCESS")
+    else:
+        append_log(session_id, f"[WARNING] Detected {len(detected_vulns)} vulnerabilities. Sending to patch pipeline.", level="WARNING")
+        for vuln in detected_vulns:
+            db.query(Vulnerability).filter(Vulnerability.id == vuln.id).update({"status": "QUEUED_FOR_PATCH"})
+            db.commit()
+            patch_queue.append({"vuln_id": str(vuln.id), "status": "QUEUED"})
+        process_patch_queue()
+        append_log(session_id, "=== SCAN COMPLETE ===", level="SUCCESS")
+    db.close()
+    
+    terminal_sessions[session_id]["found_count"] = len(detected_vulns)
+    terminal_sessions[session_id]["status"] = "COMPLETED"
+
 @app.post("/scan")
 def execute_scan(background_tasks: BackgroundTasks):
     session_id = str(uuid.uuid4())
@@ -922,16 +1021,42 @@ def scan_website_manual(payload: dict, background_tasks: BackgroundTasks):
 def executive_scan(background_tasks: BackgroundTasks):
     """
     Phase 1: Scan all predefined websites and log errors to Scanner terminal.
-    FULL AUTOMATION: Automatically process queue without manual confirmation.
     """
     global pipeline_paused
-    pipeline_paused = False  # Changed to False for FULL automation
+    pipeline_paused = True  # Restored pause for manual confirmation
     
     session_id = "executive-" + str(uuid.uuid4())[:8]
     terminal_sessions[session_id] = {"logs": [], "status": "RUNNING"}
     background_tasks.add_task(run_executive_scan_task, session_id)
     
     return {"scan_id": session_id, "status": "RUNNING"}
+
+@app.post("/scan-github")
+def scan_github_endpoint(payload: dict):
+    url = payload.get("url", "")
+    if not url or "github.com/" not in url:
+        raise HTTPException(status_code=400, detail="Invalid GitHub URL")
+        
+    parts = url.split("github.com/")[-1].split("/")
+    if len(parts) < 2:
+        raise HTTPException(status_code=400, detail="Invalid Repo Format")
+        
+    repo_full_name = f"{parts[0]}/{parts[1]}"
+    session_id = str(uuid.uuid4())[:8]
+    terminal_sessions[session_id] = {"logs": [], "status": "RUNNING"}
+    
+    job = {
+        "scan_id": session_id,
+        "type": "github_repo",
+        "repo": repo_full_name,
+        "branch": "main",
+        "trigger_source": "Manual GitHub URL"
+    }
+    
+    scan_queue.append(job)
+    process_queue()
+    
+    return {"scan_id": session_id, "status": "QUEUED"}
 
 @app.post("/queue-confirm/{scan_id}")
 def queue_confirm(scan_id: str):
@@ -1008,7 +1133,7 @@ def run_queuing_task():
             
             # Detailed sequential feedback
             append_log("pipeline", f"[INGEST] ({i+1}/{found_count}) Discovered: {vuln.vulnerability_type} in {vuln.file_name}")
-            append_log("pipeline", f"[INGEST]   â†³ Mapping to Neural Core...")
+            append_log("pipeline", f"[INGEST]   |- Mapping to Neural Core...")
             db.commit() # Commit each one so frontend sees status change
             # time.sleep(1.8) removed
             
@@ -1026,8 +1151,7 @@ def get_queue_status():
     }
 
 def run_executive_scan_task(session_id: str):
-    """Step 1: Scans all endpoints and prepares the session for queue confirmation."""
-    append_log(session_id, "â”â”â” EXECUTIVE SECURITY AUDIT INITIATED â”â”â”", level="INFO")
+    append_log(session_id, "=== EXECUTIVE SECURITY AUDIT INITIATED ===", level="INFO")
     append_log(session_id, f"Scanning {len(PREDEFINED_WEBSITES)} target endpoints...")
     
     trigger = "Manual Dashboard"
@@ -1049,7 +1173,7 @@ def run_executive_scan_task(session_id: str):
     vuln_ids = []
     
     for site in PREDEFINED_WEBSITES:
-        append_log(session_id, f"[SCAN] â–º Auditing: {site['name']}", level="INFO")
+        append_log(session_id, f"[SCAN] -> Auditing: {site['name']}", level="INFO")
         try:
             # We use scan_website_core_scan_only which returns count and stores as DETECTED
             found = scan_website_core_scan_only(site["url"], session_id, site["name"], scan_session.id)
@@ -1064,11 +1188,10 @@ def run_executive_scan_task(session_id: str):
             vuln_ids.extend([v.id for v in site_vulns])
             
         except Exception as e:
-            append_log(session_id, f"[SCAN]   âœ— Error: {site['name']} | {str(e)}", level="WARNING")
+            append_log(session_id, f"[SCAN]   X Error: {site['name']} | {str(e)}", level="WARNING")
     
     append_log(session_id, f"")
-    append_log(session_id, f"â”â”â” SCAN COMPLETE â”â”â”", level="SUCCESS")
-    append_log(session_id, f"[INFO] Scan completed. {total_found} vulnerabilities detected.", level="SUCCESS")
+    append_log(session_id, "=== SCAN COMPLETE ===", level="SUCCESS")
     append_log(session_id, "[INFO] Ready to queue vulnerabilities for automated patching.")
     
     # Store session data
@@ -1093,7 +1216,7 @@ def scan_website_task(url: str, session_id: str, app_name: str):
     
     try:
         found_count = scan_website_core(url, session_id, app_name, scan_session.id)
-        append_log(session_id, "Scan Completed Successfully.", level="SUCCESS")
+        append_log(session_id, "=== SCAN COMPLETE ===", level="SUCCESS")
         # CRITICAL: Set found_count BEFORE status="COMPLETED"
         terminal_sessions[session_id]["found_count"] = found_count
         terminal_sessions[session_id]["status"] = "COMPLETED"
