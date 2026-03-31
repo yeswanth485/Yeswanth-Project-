@@ -455,6 +455,7 @@ def run_patch_pipeline(job):
 def start_pipeline():
     global pipeline_paused
     pipeline_paused = False
+    append_log("pipeline", "[SUCCESS] AUTOMATION PATH FINDING INITIATED. COMMENCING REMEDIATION PROTOCOL...", level="SUCCESS")
     append_log("pipeline", "[ACTION] User confirmed execution. Resuming remediation queue...")
     process_patch_queue()
     return {"status": "started", "queue_size": len(patch_queue)}
