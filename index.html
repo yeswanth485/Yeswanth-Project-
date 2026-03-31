@@ -285,16 +285,22 @@
 
             async fetchTerminal() {
                 try {
-                    const [scanRes, pipeRes] = await Promise.all([
+                    const [scanRes, pipeRes, statusRes] = await Promise.all([
                         fetch(`${API_URL}/terminal-stream?session_id=${this.currentScanId}`),
-                        fetch(`${API_URL}/terminal-stream?session_id=pipeline`)
+                        fetch(`${API_URL}/terminal-stream?session_id=pipeline`),
+                        fetch(`${API_URL}/pipeline/status`)
                     ]);
 
                     const scanData = await scanRes.json();
                     const pipeData = await pipeRes.json();
+                    const pipeStatus = await statusRes.json();
 
                     this.terminalLogs = scanData.logs || [];
                     this.pipelineLogs = pipeData.logs || [];
+                    
+                    // Atomic sync of queue count BEFORE checking completion
+                    this.queueCount = pipeStatus.queue_count || 0;
+                    this.paused = pipeStatus.paused;
 
                     const oldStatus = this.scanStatus;
                     this.scanStatus = scanData.status || 'COMPLETED';
@@ -303,7 +309,7 @@
                     // Executive Workflow Step 1: Scan Finished
                     if (oldStatus === 'RUNNING' && this.scanStatus === 'COMPLETED' && !this.scanFinishedFlag) {
                         this.scanFinishedFlag = true;
-                        console.log("[WORKFLOW] Scan Complete. Vulnerabilities Found:", foundCount);
+                        console.log("[WORKFLOW] Scan Complete. Atomic Queue Count:", this.queueCount);
                     }
 
                     // Executive Workflow Step 2: Automation Finished
@@ -313,7 +319,7 @@
                     }
                     this.lastQueueCount = this.queueCount;
 
-                    if (router.current === 'terminal') app.render(true);
+                    if (router.current === 'terminal' || this.scanFinishedFlag) app.render(true);
                 } catch (e) { console.error("Terminal Sync Error", e); }
             },
 
