@@ -1155,21 +1155,27 @@ def run_queuing_task():
             Vulnerability.status.in_(["DETECTED", "FAILED"])
         ).all()
         
-        patch_queue.clear()
+        # IMPORTANT: Do NOT clear patch_queue - scanner may have already added items.
+        # Only append items not already present.
+        existing_vuln_ids = {item["vuln_id"] for item in patch_queue}
         found_count = len(detected)
         append_log("pipeline", f"[SYSTEM] {found_count} VULNERABILITIES IDENTIFIED IN REGISTRY.")
         
+        new_added = 0
         for i, vuln in enumerate(detected):
-            vuln.status = "QUEUED_FOR_PATCH"
-            patch_queue.append({"vuln_id": vuln.id, "status": "QUEUED"})
+            if vuln.id not in existing_vuln_ids:
+                vuln.status = "QUEUED_FOR_PATCH"
+                patch_queue.append({"vuln_id": vuln.id, "status": "QUEUED"})
+                existing_vuln_ids.add(vuln.id)
+                new_added += 1
+                # Detailed sequential feedback
+                append_log("pipeline", f"[INGEST] ({i+1}/{found_count}) Queueing: {vuln.vulnerability_type} in {vuln.file_name}")
+                db.commit()
             
-            # Detailed sequential feedback
-            append_log("pipeline", f"[INGEST] ({i+1}/{found_count}) Discovered: {vuln.vulnerability_type} in {vuln.file_name}")
-            append_log("pipeline", f"[INGEST]   |- Mapping to Neural Core...")
-            db.commit() # Commit each one so frontend sees status change
-            # time.sleep(1.8) removed
-            
-        append_log("pipeline", "[SYSTEM] QUEUING_COMPLETE: All detected vulnerabilities are now in the remediation pipeline.", level="SUCCESS")
+        if new_added > 0:
+            append_log("pipeline", f"[SYSTEM] QUEUING_COMPLETE: {new_added} new vulnerabilities added to remediation pipeline.", level="SUCCESS")
+        else:
+            append_log("pipeline", "[SYSTEM] QUEUING_COMPLETE: All findings already in queue from live scanner.", level="SUCCESS")
     finally:
         db.close()
         queuing_active = False
@@ -1237,10 +1243,20 @@ def run_executive_scan_task(session_id: str):
         pipeline_paused = False  # Automatically unpause
         queuing_active = True
         
-        # Start the queuing and patching process in a fire-and-forget thread
         def autonomous_bridge():
-            time.sleep(1) # Small delay for UI sync
-            run_queuing_task()
+            time.sleep(1.5) # Small delay for UI sync
+            
+            if len(patch_queue) > 0:
+                # Scanner already populated the queue - skip ingestion, start patching NOW
+                append_log("pipeline", f"[SYSTEM] HANDOVER SUCCESS: {len(patch_queue)} findings already queued by live scanner.", level="SUCCESS")
+                append_log("pipeline", "[SYSTEM] BYPASSING REGISTRY INGESTION - IMMEDIATE REMEDIATION START.", level="SUCCESS")
+                append_log("pipeline", "[SUCCESS] AUTOMATION PATH FINDING INITIATED. COMMENCING REMEDIATION PROTOCOL...", level="SUCCESS")
+            else:
+                # Fallback: queue from database
+                append_log("pipeline", "[SYSTEM] No live queue found. Fetching from registry...", level="INFO")
+                run_queuing_task()
+            
+            # Start the patch worker immediately
             process_patch_queue()
         
         bridge_thread = threading.Thread(target=autonomous_bridge)
