@@ -1,7 +1,7 @@
 import os
 import sys
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Header, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import create_engine, Column, Integer, String, Text, Float, DateTime, ForeignKey
@@ -63,7 +63,7 @@ def run_scan_job(job):
     except Exception as e:
         append_log(scan_id, f"Job failed: {str(e)}", level="ERROR")
     finally:
-        append_log(scan_id, "[SUCCESS] Job completed.")
+        append_log(scan_id, "=== SCAN COMPLETE ===", level="SUCCESS")
         job["status"] = "COMPLETED"
         if scan_id in terminal_sessions:
             terminal_sessions[scan_id]["status"] = "COMPLETED"
@@ -181,6 +181,14 @@ def read_root():
         return HTMLResponse(content="<h1>AegisCore: Frontend Index Not Found</h1>", status_code=404)
     with open(index_path, "r", encoding="utf-8") as f:
         return f.read()
+
+@app.get("/github_banner.png")
+def get_github_banner():
+    """Serves the generated premium GitHub visual asset."""
+    banner_path = os.path.join(PROJECT_ROOT, "github_banner.png")
+    if os.path.exists(banner_path):
+        return FileResponse(banner_path)
+    return JSONResponse(status_code=404, content={"detail": "Banner asset not found"})
 
 @app.post("/webhook/github")
 async def github_webhook(request: Request, background_tasks: BackgroundTasks):

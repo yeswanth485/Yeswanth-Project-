@@ -313,7 +313,7 @@
                     }
                     this.lastQueueCount = this.queueCount;
 
-                    if (router.current === 'terminal') app.renderTerminalOnly();
+                    if (router.current === 'terminal') app.render(true);
                 } catch (e) { console.error("Terminal Sync Error", e); }
             },
 
